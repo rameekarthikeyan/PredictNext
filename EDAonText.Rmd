@@ -1,0 +1,136 @@
+---
+title: "Exploratory Data Analysis on corpora"
+output: html_document
+---
+This report is to briefly explain the exploratory data analysis carried out on set of three English text files. The report is divided into following sections:
+
+- Getting the data
+- Summarizing the data
+- Sampling the data
+- Tokenization
+- n-gram frequency distribution
+- Plan for prediction alogrithm
+
+**Getting the data:**
+The data has been downloaded from the website - [https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip) . Data consists of three English text files. The data is then loaded into R by using the function $readLines$.
+
+```{r results='hide'}
+fileconn <- file("en_US.blogs.txt", "rb" )
+newblogs <- readLines(fileconn, skipNul = TRUE)
+close(fileconn)
+fileconn <- file("en_US.news.txt", "rb")
+newnews <- readLines(fileconn, skipNul = TRUE)
+close(fileconn)
+fileconn <- file("en_US.twitter.txt", "rb" )
+newtwitter <- readLines(fileconn, skipNul = TRUE)
+close(fileconn)
+```
+
+```{r echo =FALSE,results='hide'}
+newblogs <- iconv(newblogs, from = "UTF-8", to = "latin1", sub = "")
+newnews <- iconv(newnews, from = "UTF-8", to = "latin1", sub = "")
+newtwitter <- iconv(newtwitter, from = "UTF-8", to = "latin1", sub = "")
+source("./countingword.R")
+countingword(newblogs)
+countingword(newnews)
+countingword(newtwitter)
+```
+
+**Summarizing the data:**
+
+- Length of the "en_US.blogs.txt"" file is `r length(newblogs)` lines and `r countingword(newblogs)` words.
+- Length of the "en_US.news.txt"" file is `r length(newnews)` lines and `r countingword(newnews)` words.
+- Length of the "en_US.twitter.txt"" file is `r length(newtwitter)` lines and `r countingword(newtwitter)` words.
+
+
+**Sampling the data:**
+$rbinom$ method is used to sample the data. A biased coin of 1% chance of getting head is used to sample the data. About 1% of the original text file size is thus obtained. The three sampled texts are then collectively used to analyze the word frequency distribution.
+
+```{r echo =FALSE, results='hide'}
+blogrv <- rbinom(length(newblogs),1,0.1)
+sampleblog <- newblogs[blogrv == 1]
+newsrv <- rbinom(length(newnews),1,0.1)
+samplenews <- newnews[newsrv == 1]
+length(samplenews)
+twitterrv <- rbinom(length(newtwitter),1,0.1)
+sampletwitter <- newtwitter[twitterrv == 1]
+length(sampletwitter)
+```
+
+**Tokenization:**
+A function for $tokenization$ is written using the regular expression function $gsub$ to identify *only* the words in the text file.
+
+```{r echo=FALSE, results='hide'}
+source("./tokeniser.R")
+wordblog <- tokeniser(sampleblog)
+wordnews <- tokeniser(samplenews)
+wordtwitter <- tokeniser(sampletwitter)
+coltxt <- c(wordblog, wordnews, wordtwitter)
+```
+
+**n-gram frequency distribution:**
+$textcnt$ function of R package $tau$ is used for analyzing the frequency distribution of n-grams. List of a few common words is removed to understand the relationship between the words in the corpora.
+
+*1-gram frequency distribution:*
+
+The following frequency distribution is obtained after doing 1-gram.
+
+```{r echo =FALSE}
+library(data.table)
+library(tau)
+stoplist <- c("i", "a", "about", "an", "and","are", "as", "at", "be", "by", "for", "from", "he","how","her","his","if", "in", "is", "it", "me", "my","of", "on", "or","she", "that", "the", "this", "to", "was", "what", "when", "where", "who", "will", "with", "you", "your")
+coltxt <- remove_stopwords(coltxt, stoplist, lines = TRUE)
+source("./ngramfun.R")
+freqdist <- ngramfun(coltxt,1)
+setkey(freqdist, freq)
+highfreq <- tail(freqdist,100)
+```
+
+```{r echo = FALSE}
+tail(highfreq, 10)
+library(wordcloud)
+wordcloud(highfreq$grams, highfreq$freq, scale = c(4,0.2))
+library(ggplot2)
+require(grDevices)
+highfreq <- tail(freqdist,20)
+barplot(as.vector(highfreq$freq), names.arg = highfreq$grams, cex.names = 0.5, main = "1-gram frequency distribution", xlab = "1 - grams", ylab = "Frequency of occurrence")
+```
+
+From the distribution, it is clear that words such as **`r freqdist$grams[nrow(freqdist)]`** and **`r freqdist$grams[nrow(freqdist)-1]`** occurs more often than other words.
+
+*2-gram frequency distribution:*
+
+
+```{r echo=FALSE}
+freqdist <- ngramfun(coltxt,2)
+setkey(freqdist, freq)
+highfreq <- tail(freqdist,30)
+tail(highfreq,10)
+wordcloud(highfreq$grams, highfreq$freq, scale = c(4,0.2))
+highfreq <- tail(freqdist,10)
+barplot(as.vector(highfreq$freq), names.arg = highfreq$grams, cex.names = 0.5, main = "2-gram frequency distribution", xlab = "2 - grams", ylab = "Frequency of occurrence")
+```
+
+Word pairs such as **`r freqdist$grams[nrow(freqdist)]`** and **`r freqdist$grams[nrow(freqdist)-1]`** tend to occur more often than other word pairs.
+
+*3-gram frequency distribution:*
+
+
+```{r echo =FALSE}
+freqdist <- ngramfun(coltxt,3)
+setkey(freqdist, freq)
+highfreq <- tail(freqdist,3)
+tail(freqdist,10)
+highfreq <- tail(freqdist,5)
+barplot(as.vector(highfreq$freq), names.arg = highfreq$grams, cex.names = 0.5, main = "3-gram frequency distribution", xlab = "3 - grams", ylab = "Frequency of occurrence")
+```
+
+Word phrases such as **`r freqdist$grams[nrow(freqdist)]`** and **`r freqdist$grams[nrow(freqdist)-1]`** occurs more often than other word phrases.
+
+**Plan for prediction algorithm:**
+
+- Segment the corpora data into training and test corpus
+- Apply N-gram model to the training corpus (conditional probability for next word based on Markov process)
+- Apply one of the techniques for unseen n-grams (Smoothing/Backoff/Good-Turing)
+- Predict with the test set
+
